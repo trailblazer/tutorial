@@ -6,12 +6,14 @@ class BasicsTest < Minitest::Spec
   module A
     User = Module.new
 
+    #:rw
     class Signup < Trailblazer::Activity::Railway
       step :validate
-      step :extract_omniauth
+      pass :extract_omniauth
       step :find_user
-      step :log
+      pass :log
     end
+    #:rw end
   end
 
 =begin
