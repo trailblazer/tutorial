@@ -65,29 +65,39 @@ NameError: undefined method `validate' for class `Signup'
       step :find_user
       pass :log
 
+      #~tasks
       # Validate the incoming Github data.
       # Yes, we could and should use Reform or Dry-validation here.
       #:rw-validate
       def validate(ctx, params:, **)
-        params.is_a?(Hash) && params["info"].is_a?(Hash) && params["info"]["email"]
+        is_valid = params.is_a?(Hash) && params["info"].is_a?(Hash) && params["info"]["email"]
+
+        is_valid # return value matters!
       end
       #:rw-validate end
 
       #~extr
+      #:rw-extract
       def extract_omniauth(ctx, params:, **)
         ctx[:email] = params["info"]["email"]
       end
+      #:rw-extract end
 
+      #:rw-find
       def find_user(ctx, email:, **)
         user = User.find_by(email: email)
 
         ctx[:user] = user
       end
+      #:rw-find end
 
+      #:rw-log
       def log(ctx, **)
         # run some logging here
       end
+      #:rw-log end
       #~extr end
+      #~tasks end
     end
     #:rw-meth end
 
@@ -95,15 +105,29 @@ NameError: undefined method `validate' for class `Signup'
       class Signup < Trailblazer::Activity::Railway
         step :validate
 
-        #:rw-raise
+        #:rw-params
         def validate(ctx, params:, **)
-          raise ctx.inspect
+          raise params.inspect
         end
-        #:rw-raise end
+        #:rw-params end
+
+        #:rw-ctx
+        def validate(ctx, **)
+          params = ctx[:params]
+          raise params.inspect
+        end
+        #:rw-ctx end
       end
     end
   end
 =begin
+#:exc-params
+ctx = {params: {provider: "Nickhub"}}
+
+signal, (ctx, _) = Signup.invoke([ctx], {})
+#=> RuntimeError: {:provider=>"Nickhub"}
+#:exc-params end
+
 #:exc
 ctx = {params: {provider: "Nickhub"}}
 
@@ -112,9 +136,34 @@ signal, (ctx, _) = Signup.invoke([ctx], {})
 #:exc end
 =end
 
+  class User < Struct.new(:email, :id)
+    def self.find_by(email:)
+      new(email)
+    end
+  end
+
   it do
     ctx = {params: {provider: "Nickhub"}}
 
     B::BB::Signup.invoke([ctx], {})
+  end
+
+  it "plays" do
+    Signup = B::Signup
+    #:rw-invocation
+    data_from_github = {
+     "provider"=>"github",
+     "info"=>{
+      "nickname"=>"apotonick",
+      "email"=>"apotonick@gmail.com",
+      "name"=>"Nick Sutterer"
+     }
+    }
+
+    ctx = {params: data_from_github}
+
+    signal, (ctx, _) = Signup.invoke([ctx], {})
+    #:rw-invocation end
+
   end
 end
