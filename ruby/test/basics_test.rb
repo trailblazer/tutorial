@@ -8,8 +8,6 @@ end
 
 class BasicsTest < Minitest::Spec
   module A
-    User = Module.new
-
     #:rw
     class Signup < Trailblazer::Activity::Railway
       step :validate
@@ -136,12 +134,6 @@ signal, (ctx, _) = Signup.invoke([ctx], {})
 #:exc end
 =end
 
-  class User < Struct.new(:email, :id)
-    def self.find_by(email:)
-      new(email)
-    end
-  end
-
   it do
     ctx = {params: {provider: "Nickhub"}}
 
@@ -150,7 +142,8 @@ signal, (ctx, _) = Signup.invoke([ctx], {})
 
   it "plays" do
     Signup = B::Signup
-    #:rw-invocation
+
+    #:rw-invocation-setup
     data_from_github = {
      "provider"=>"github",
      "info"=>{
@@ -161,9 +154,39 @@ signal, (ctx, _) = Signup.invoke([ctx], {})
     }
 
     ctx = {params: data_from_github}
+    #:rw-invocation-setup end
 
+    User.init!
+
+    signal, (ctx, _) = Signup.invoke([ctx], {})
+    signal.inspect.must_equal %{#<Trailblazer::Activity::End semantic=:failure>}
+    ctx[:user].inspect.must_equal "nil"
+
+#:rw-invocation-fail
+=begin
+signal, (ctx, _) = Signup.invoke([ctx], {})
+
+puts signal     #=> #<Trailblazer::Activity::End semantic=:success>
+puts ctx[:user] #=> nil
+=end
+#:rw-invocation-fail end
+
+
+
+    User.init!(User.new("apotonick@gmail.com"))
+
+    #:rw-invocation
     signal, (ctx, _) = Signup.invoke([ctx], {})
     #:rw-invocation end
 
+    signal.inspect.must_equal %{#<Trailblazer::Activity::End semantic=:success>}
+    ctx[:user].inspect.must_equal %{#<struct User email=\"apotonick@gmail.com\", id=nil>}
+
+=begin
+#:invocation-success
+puts signal     #=> #<Trailblazer::Activity::End semantic=:success>
+puts ctx[:user] #=> #<User email: "apotonick@gmail.com">
+#:invocation-success end
+=end
   end
 end
