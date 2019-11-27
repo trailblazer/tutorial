@@ -1,4 +1,6 @@
 require "trailblazer/activity/dsl/linear"
+require "trailblazer/developer"
+
 require "minitest/autorun"
 
 class User < Struct.new(:email, :id)

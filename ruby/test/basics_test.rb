@@ -183,7 +183,16 @@ puts ctx[:user] #=> nil
     signal.inspect.must_equal %{#<Trailblazer::Activity::End semantic=:success>}
     ctx[:user].inspect.must_equal %{#<struct User email=\"apotonick@gmail.com\", id=nil>}
 
+    #:ctx-read
+    ctx[:user] #=> #<struct User email=\"apotonick@gmail.com\">
+    #:ctx-read end
+
     signal.to_h[:semantic].must_equal :success
+
+    Trailblazer::Activity::Introspect::Graph(Signup).find("End.success")[:task].must_equal signal
+    #:end-find
+    Trailblazer::Activity::Introspect::Graph(Signup).find("End.success")[:task] == signal
+    #:end-find end
 
 =begin
 #:rw-invocation-success
@@ -199,5 +208,17 @@ puts ctx[:user] #=> #<User email: "apotonick@gmail.com">
 signal.to_h[:semantic] #=> :success
 #:end-semantic end
 =end
+
+    ctx = {params: data_from_github}
+
+    #:wtf
+    signal, (ctx, _) = Trailblazer::Developer.wtf?(Signup, ctx)
+    #:wtf end
+
+    #:wtf-exception
+    ctx = {params: data_from_github}.freeze #=> no setter anymore!
+
+    signal, (ctx, _) = Trailblazer::Developer.wtf?(Signup, ctx)
+    #:wtf-exception end
   end
 end
