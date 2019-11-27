@@ -159,17 +159,18 @@ signal, (ctx, _) = Signup.invoke([ctx], {})
     User.init!
 
     signal, (ctx, _) = Signup.invoke([ctx], {})
+
     signal.inspect.must_equal %{#<Trailblazer::Activity::End semantic=:failure>}
     ctx[:user].inspect.must_equal "nil"
 
-#:rw-invocation-fail
 =begin
+#:rw-invocation-fail
 signal, (ctx, _) = Signup.invoke([ctx], {})
 
 puts signal     #=> #<Trailblazer::Activity::End semantic=:success>
 puts ctx[:user] #=> nil
-=end
 #:rw-invocation-fail end
+=end
 
 
 
@@ -182,11 +183,21 @@ puts ctx[:user] #=> nil
     signal.inspect.must_equal %{#<Trailblazer::Activity::End semantic=:success>}
     ctx[:user].inspect.must_equal %{#<struct User email=\"apotonick@gmail.com\", id=nil>}
 
+    signal.to_h[:semantic].must_equal :success
+
 =begin
-#:invocation-success
+#:rw-invocation-success
+User.init!(User.new("apotonick@gmail.com"))
+
+signal, (ctx, _) = Signup.invoke([ctx], {})
+
 puts signal     #=> #<Trailblazer::Activity::End semantic=:success>
 puts ctx[:user] #=> #<User email: "apotonick@gmail.com">
-#:invocation-success end
+#:rw-invocation-success end
+
+#:end-semantic
+signal.to_h[:semantic] #=> :success
+#:end-semantic end
 =end
   end
 end
