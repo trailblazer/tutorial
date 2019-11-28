@@ -111,7 +111,7 @@ NameError: undefined method `validate' for class `Signup'
 
         #:rw-ctx
         def validate(ctx, **)
-          params = ctx[:params]
+          params = ctx[:params] # no keyword argument used!
           raise params.inspect
         end
         #:rw-ctx end
@@ -123,6 +123,7 @@ NameError: undefined method `validate' for class `Signup'
 ctx = {params: {provider: "Nickhub"}}
 
 signal, (ctx, _) = Signup.invoke([ctx], {})
+
 #=> RuntimeError: {:provider=>"Nickhub"}
 #:exc-params end
 
@@ -130,6 +131,7 @@ signal, (ctx, _) = Signup.invoke([ctx], {})
 ctx = {params: {provider: "Nickhub"}}
 
 signal, (ctx, _) = Signup.invoke([ctx], {})
+
 #=> RuntimeError: {:params=>{:provider=>"Nickhub"}}
 #:exc end
 =end
@@ -165,9 +167,11 @@ signal, (ctx, _) = Signup.invoke([ctx], {})
 
 =begin
 #:rw-invocation-fail
+User.init! # Empty users table.
+
 signal, (ctx, _) = Signup.invoke([ctx], {})
 
-puts signal     #=> #<Trailblazer::Activity::End semantic=:success>
+puts signal     #=> #<Trailblazer::Activity::End semantic=:failure>
 puts ctx[:user] #=> nil
 #:rw-invocation-fail end
 =end
@@ -220,5 +224,39 @@ signal.to_h[:semantic] #=> :success
 
     signal, (ctx, _) = Trailblazer::Developer.wtf?(Signup, ctx)
     #:wtf-exception end
+  end
+
+    module C
+      module Logger
+        def self.info(*args)
+
+        end
+      end
+
+      #:fail
+      class Signup < Trailblazer::Activity::Railway
+        step :validate
+        pass :extract_omniauth
+        fail :save_validation_data
+        step :find_user
+        pass :log
+        #~tasks
+        def validate(ctx, **)
+          false
+        end
+        #~tasks end
+
+        def save_validation_data(ctx, params:, **)
+          Logger.info "Signup: params was #{params.inspect}"
+        end
+      end
+      #:fail end
+    end
+
+  it do
+    ctx = {params: {}}
+
+    signal, (ctx, _) = Trailblazer::Developer.wtf?(C::Signup, ctx)
+    signal.inspect.must_equal %{#<Trailblazer::Activity::End semantic=:failure>}
   end
 end
