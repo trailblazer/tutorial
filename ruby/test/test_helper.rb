@@ -8,6 +8,10 @@ class User < Struct.new(:email, :id)
     def init!(*rows)
       @rows = rows
     end
+
+    def create(email:)
+      new(email)
+    end
   end
 
   def self.find_by(email:)
