@@ -185,7 +185,7 @@ puts ctx[:user] #=> nil
     #:rw-invocation end
 
     signal.inspect.must_equal %{#<Trailblazer::Activity::End semantic=:success>}
-    ctx[:user].inspect.must_equal %{#<struct User email=\"apotonick@gmail.com\", id=nil>}
+    ctx[:user].inspect.must_equal %{#<struct User email=\"apotonick@gmail.com\", id=nil, username=nil>}
 
     #:ctx-read
     ctx[:user] #=> #<struct User email=\"apotonick@gmail.com\">

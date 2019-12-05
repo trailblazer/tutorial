@@ -3,14 +3,14 @@ require "trailblazer/developer"
 
 require "minitest/autorun"
 
-class User < Struct.new(:email, :id)
+class User < Struct.new(:email, :id, :username)
   class << self
     def init!(*rows)
       @rows = rows
     end
 
-    def create(email:)
-      new(email)
+    def create(email:, username: nil)
+      new(email, nil, username)
     end
   end
 
