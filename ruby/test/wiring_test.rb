@@ -240,6 +240,7 @@ class WiringTest < Minitest::Spec
         # run some logging here
       end
 
+      #:path-tasks
       def compute_username(ctx, email:, **)
         ctx[:username] = email.split("@")[0]
       end
@@ -251,6 +252,7 @@ class WiringTest < Minitest::Spec
       def notify(ctx, **)
         true
       end
+      #:path-tasks end
       #~tasks end
     end
     #:path end
@@ -260,27 +262,88 @@ class WiringTest < Minitest::Spec
     Signup = D::Signup
 
 # New user
+    #:path-new
     User.init!()
-
     ctx = {params: data_from_github}
 
-    #:new
     signal, (ctx, _) = Trailblazer::Developer.wtf?(Signup, [ctx])
-    #:new end
+
+    signal.to_h[:semantic] #=> :new
+    ctx[:user]             #=> #<User email=\"apotonick@gmail.com\", username=\"apotonick\">
+    #:path-new end
 
     signal.inspect.must_equal %{#<Trailblazer::Activity::End semantic=:new>}
     ctx[:user].inspect.must_equal %{#<struct User email=\"apotonick@gmail.com\", id=nil, username=\"apotonick\">}
 
 # Existing user
+    #:path-existing
     User.init!(User.new("apotonick@gmail.com", 1, "apotonick"))
-
     ctx = {params: data_from_github}
 
-    #:success
     signal, (ctx, _) = Trailblazer::Developer.wtf?(Signup, [ctx])
-    #:success end
+
+    signal.to_h[:semantic] #=> :success
+    ctx[:user]             #=> #<User email=\"apotonick@gmail.com\", username=\"apotonick\">
+    #:path-existing end
 
     signal.inspect.must_equal %{#<Trailblazer::Activity::End semantic=:success>}
     ctx[:user].inspect.must_equal %{#<struct User email=\"apotonick@gmail.com\", id=1, username=\"apotonick\">}
+  end
+
+  module E
+    #:compute_username
+    class Signup < Trailblazer::Activity::Railway
+      NewUser = Class.new(Trailblazer::Activity::Signal)
+
+      step :validate
+      pass :extract_omniauth
+      step :find_user, Output(NewUser, :new) => Path(end_id: "End.new", end_task: End(:new)) do
+        step :compute_username, Trailblazer::Activity.Output(Trailblazer::Activity::Left, :failure) => Trailblazer::Activity::DSL::Linear.Track(:failure)
+        step :create_user
+        step :notify
+      end
+      pass :log
+
+      #~tasks
+      def validate(ctx, params:, **)
+        is_valid = params.is_a?(Hash) && params["info"].is_a?(Hash) && params["info"]["email"]
+
+        is_valid # return value matters!
+      end
+
+      def extract_omniauth(ctx, params:, **)
+        ctx[:email] = params["info"]["email"]
+      end
+
+      def find_user(ctx, email:, **)
+        user = User.find_by(email: email)
+
+        ctx[:user] = user
+
+        user ? true : NewUser
+      end
+
+      #:compute_username_false
+      def compute_username(ctx, email:, **)
+        false
+      end
+      #:compute_username_false end
+      #~tasks end
+    end
+    #:compute_username end
+  end
+
+  it "Path() escape" do
+    Signup = E::Signup
+
+# Break and escape in {compute_username}
+    User.init!()
+
+    ctx = {params: data_from_github}
+
+    signal, (ctx, _) = Trailblazer::Developer.wtf?(Signup, [ctx])
+
+    signal.inspect.must_equal %{#<Trailblazer::Activity::End semantic=:failure>}
+    ctx[:user].inspect.must_equal %{nil}
   end
 end
