@@ -346,4 +346,198 @@ class WiringTest < Minitest::Spec
     signal.inspect.must_equal %{#<Trailblazer::Activity::End semantic=:failure>}
     ctx[:user].inspect.must_equal %{nil}
   end
+
+### Nesting
+
+  module F
+    #:validate
+    class Validate < Trailblazer::Activity::Railway
+      # Yes, you  can use lambdas as steps, too!
+      step ->(ctx, params:, **) { params.is_a?(Hash) }
+      step ->(ctx, params:, **) { params["info"].is_a?(Hash) }
+      step ->(ctx, params:, **) { params["info"]["email"] }
+    end
+    #:validate end
+
+    #:subprocess
+    class Signup < Trailblazer::Activity::Railway
+      NewUser = Class.new(Trailblazer::Activity::Signal)
+
+      step Subprocess(Validate)
+      pass :extract_omniauth
+      step :find_user, Output(NewUser, :new) => Path(end_id: "End.new", end_task: End(:new)) do
+        step :compute_username
+        step :create_user
+        step :notify
+      end
+      pass :log
+
+      #~tasks
+      def create_user(ctx, email:, **)
+        ctx[:user] = User.create(email: email)
+      end
+
+      def extract_omniauth(ctx, params:, **)
+        ctx[:email] = params["info"]["email"]
+      end
+
+      def find_user(ctx, email:, **)
+        user = User.find_by(email: email)
+
+        ctx[:user] = user
+
+        user ? true : NewUser
+      end
+
+      def log(ctx, **)
+        # run some logging here
+      end
+
+      def compute_username(ctx, email:, **)
+        ctx[:username] = email.split("@")[0]
+      end
+
+      def create_user(ctx, email:, username:, **)
+        ctx[:user] = User.create(email: email, username: username)
+      end
+
+      def notify(ctx, **)
+        true
+      end
+      #~tasks end
+    end
+    #:subprocess end
+  end
+
+  it "Subprocess, with two outgoing connections" do
+    Signup = F::Signup
+
+# New user
+    #:validate-new
+    User.init!()
+    ctx = {params: data_from_github}
+
+    signal, (ctx, _) = Trailblazer::Developer.wtf?(Signup, [ctx])
+
+    signal.to_h[:semantic] #=> :new
+    ctx[:user]             #=> #<User email=\"apotonick@gmail.com\", username=\"apotonick\">
+    #:validate-new end
+
+    signal.inspect.must_equal %{#<Trailblazer::Activity::End semantic=:new>}
+    ctx[:user].inspect.must_equal %{#<struct User email=\"apotonick@gmail.com\", id=nil, username=\"apotonick\">}
+  end
+
+  module G
+    Validate = F::Validate
+
+    class FindUser < Trailblazer::Activity::Railway
+      NewUser = Class.new(Trailblazer::Activity::Signal)
+
+      step :const_defined?
+      step :query, Output(NewUser, :new) => End(:new)
+
+      def const_defined?(ctx, **)
+        Kernel.const_defined?("User")
+      end
+
+      def query(ctx, email:, **)
+        ctx[:user] = User.find_by(email: email)
+
+        ctx[:user] ? true : NewUser
+      end
+    end
+
+    #:subprocess-new
+    class Signup < Trailblazer::Activity::Railway
+
+      step Subprocess(Validate)
+      pass :extract_omniauth
+      step Subprocess(FindUser), Output(:new) => Path(end_id: "End.new", end_task: End(:new)) do
+        step :compute_username
+        step :create_user
+        step :notify
+      end
+      pass :log
+
+      #~tasks
+      def create_user(ctx, email:, **)
+        ctx[:user] = User.create(email: email)
+      end
+
+      def extract_omniauth(ctx, params:, **)
+        ctx[:email] = params["info"]["email"]
+      end
+
+      def log(ctx, **)
+        # run some logging here
+      end
+
+      def compute_username(ctx, email:, **)
+        ctx[:username] = email.split("@")[0]
+      end
+
+      def create_user(ctx, email:, username:, **)
+        ctx[:user] = User.create(email: email, username: username)
+      end
+
+      def notify(ctx, **)
+        true
+      end
+      #~tasks end
+    end
+    #:subprocess-new end
+  end
+
+  it "Subprocess, with 3 outgoing connections" do
+    Signup = G::Signup
+
+# New user
+    #:validate-new
+    User.init!()
+    ctx = {params: data_from_github}
+
+    signal, (ctx, _) = Trailblazer::Developer.wtf?(Signup, [ctx])
+
+    signal.to_h[:semantic] #=> :new
+    ctx[:user]             #=> #<User email=\"apotonick@gmail.com\", username=\"apotonick\">
+    #:validate-new end
+
+    signal.inspect.must_equal %{#<Trailblazer::Activity::End semantic=:new>}
+    ctx[:user].inspect.must_equal %{#<struct User email=\"apotonick@gmail.com\", id=nil, username=\"apotonick\">}
+
+# Existing user
+    #:validate-existing
+    User.init!(User.new("apotonick@gmail.com"))
+    ctx = {params: data_from_github}
+
+    signal, (ctx, _) = Trailblazer::Developer.wtf?(Signup, [ctx])
+
+    signal.to_h[:semantic] #=> :new
+    ctx[:user]             #=> #<User email=\"apotonick@gmail.com\", username=\"apotonick\">
+    #:validate-existing end
+
+    signal.inspect.must_equal %{#<Trailblazer::Activity::End semantic=:success>}
+    ctx[:user].inspect.must_equal %{#<struct User email=\"apotonick@gmail.com\", id=nil, username=nil>}
+
+# DB breakage
+    #:validate-break
+    # User.init!(User.new("apotonick@gmail.com"))
+    ctx = {params: data_from_github}
+
+    TmpUser = User
+    Object.send(:remove_const, "User")
+
+    signal, (ctx, _) = Trailblazer::Developer.wtf?(Signup, [ctx])
+
+    ::User = TmpUser
+
+    signal.to_h[:semantic] #=> :new
+    ctx[:user]             #=> #<User email=\"apotonick@gmail.com\", username=\"apotonick\">
+    #:validate-break end
+
+    signal.inspect.must_equal %{#<Trailblazer::Activity::End semantic=:failure>}
+    ctx[:user].inspect.must_equal %{nil}
+
+
+  end
 end
