@@ -305,11 +305,13 @@ class WiringTest < Minitest::Spec
       pass :log
 
       #~tasks
+      #:validate-method
       def validate(ctx, params:, **)
         is_valid = params.is_a?(Hash) && params["info"].is_a?(Hash) && params["info"]["email"]
 
         is_valid # return value matters!
       end
+      #:validate-method end
 
       def extract_omniauth(ctx, params:, **)
         ctx[:email] = params["info"]["email"]
@@ -427,6 +429,89 @@ class WiringTest < Minitest::Spec
     ctx[:user].inspect.must_equal %{#<struct User email=\"apotonick@gmail.com\", id=nil, username=\"apotonick\">}
   end
 
+  module H
+    #:validate-3
+    class Validate < Trailblazer::Activity::Railway
+      # Yes, you  can use lambdas as steps, too!
+      step ->(ctx, params:, **) { params.is_a?(Hash) }
+      step ->(ctx, params:, **) { params["info"].is_a?(Hash) },
+        Output(:failure) => End(:no_info)
+      step ->(ctx, params:, **) { params["info"]["email"] }
+    end
+    #:validate-3 end
+
+    #:subprocess-3
+    class Signup < Trailblazer::Activity::Railway
+      NewUser = Class.new(Trailblazer::Activity::Signal)
+
+      step Subprocess(Validate), Output(:no_info) => End(:no_info)
+      pass :extract_omniauth
+      step :find_user, Output(NewUser, :new) => Path(end_id: "End.new", end_task: End(:new)) do
+        step :compute_username
+        step :create_user
+        step :notify
+      end
+      pass :log
+
+      #~tasks
+      def create_user(ctx, email:, **)
+        ctx[:user] = User.create(email: email)
+      end
+
+      def extract_omniauth(ctx, params:, **)
+        ctx[:email] = params["info"]["email"]
+      end
+
+      def find_user(ctx, email:, **)
+        user = User.find_by(email: email)
+
+        ctx[:user] = user
+
+        user ? true : NewUser
+      end
+
+      def log(ctx, **)
+        # run some logging here
+      end
+
+      def compute_username(ctx, email:, **)
+        ctx[:username] = email.split("@")[0]
+      end
+
+      def create_user(ctx, email:, username:, **)
+        ctx[:user] = User.create(email: email, username: username)
+      end
+
+      def notify(ctx, **)
+        true
+      end
+      #~tasks end
+    end
+    #:subprocess-3 end
+  end
+
+  it "Subprocess, with two outgoing connections" do
+    Signup = H::Signup
+
+# New user
+    #:validate-new
+    User.init!()
+    ctx = {params: {}}
+
+    signal, (ctx, _) = Trailblazer::Developer.wtf?(Signup, [ctx])
+
+    signal.to_h[:semantic] #=> :new
+    ctx[:user]             #=> #<User email=\"apotonick@gmail.com\", username=\"apotonick\">
+    #:validate-new end
+
+    signal.inspect.must_equal %{#<Trailblazer::Activity::End semantic=:no_info>}
+    ctx[:user].inspect.must_equal %{nil}
+
+=begin
+Trailblazer::Activity::Circuit::IllegalSignalError: <>[][ #<Trailblazer::Activity::End semantic=:no_info> ]
+=end
+  end
+
   module G
     Validate = F::Validate
 
@@ -537,7 +622,5 @@ class WiringTest < Minitest::Spec
 
     signal.inspect.must_equal %{#<Trailblazer::Activity::End semantic=:failure>}
     ctx[:user].inspect.must_equal %{nil}
-
-
   end
 end
