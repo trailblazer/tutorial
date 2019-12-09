@@ -492,13 +492,28 @@ class WiringTest < Minitest::Spec
 
   it "Subprocess, with two outgoing connections" do
     Signup = H::Signup
+    Validate = H::Validate
+
+# Validate works fine
+    #:validate-run
+    ctx = {params: {}}
+
+    signal, (ctx, _) = Trailblazer::Developer.wtf?(Validate, [ctx])
+
+    signal.to_h[:semantic] #=> :no_info
+    #:validate-run end
+
+    signal.inspect.must_equal %{#<Trailblazer::Activity::End semantic=:no_info>}
 
 # New user
-    #:validate-new
     User.init!()
+    #:nested-invoke
     ctx = {params: {}}
 
     signal, (ctx, _) = Trailblazer::Developer.wtf?(Signup, [ctx])
+
+    #=> Trailblazer::Activity::Circuit::IllegalSignalError: <>[][ #<Trailblazer::Activity::End semantic=:no_info> ]
+    #:nested-invoke end
 
     signal.to_h[:semantic] #=> :new
     ctx[:user]             #=> #<User email=\"apotonick@gmail.com\", username=\"apotonick\">
