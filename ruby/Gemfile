@@ -1,7 +1,7 @@
 source "https://rubygems.org"
 
 
-gem "trailblazer-activity-dsl-linear", "0.2.2"
+gem "trailblazer-activity-dsl-linear", ">= 0.2.3"
 gem "trailblazer-developer"
 
 gem "minitest"

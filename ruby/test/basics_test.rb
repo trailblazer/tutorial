@@ -1,11 +1,5 @@
 require "test_helper"
 
-Trailblazer::Activity::Railway.class_eval do
-  def self.invoke(*args)
-    Trailblazer::Activity::TaskWrap.invoke(self, *args)
-  end
-end
-
 class BasicsTest < Minitest::Spec
   module A
     #:rw
